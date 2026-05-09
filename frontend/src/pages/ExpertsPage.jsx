@@ -66,7 +66,6 @@ export default function ExpertsPage() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-      {/* Header */}
       <div className="mb-8">
         <h1 className="font-display text-3xl text-[#003049] mb-1">
           Find an Expert
@@ -76,7 +75,6 @@ export default function ExpertsPage() {
         </p>
       </div>
 
-      {/* Filters */}
       <div className="mb-7">
         <SearchFilters
           categories={categories}
@@ -85,14 +83,12 @@ export default function ExpertsPage() {
         />
       </div>
 
-      {/* Results count */}
       {!loading && !error && (
         <p className="text-xs text-[#9CA3AF] mb-5">
           {pagination.total} expert{pagination.total !== 1 ? 's' : ''} found
         </p>
       )}
 
-      {/* Error */}
       {error && (
         <div className="rounded-md bg-red-50 border border-red-200 p-4 mb-6 text-sm text-red-600">
           {error} —{' '}
@@ -105,9 +101,8 @@ export default function ExpertsPage() {
         </div>
       )}
 
-      {/* Grid */}
       {loading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 auto-rows-fr">
           {Array.from({ length: 9 }).map((_, i) => (
             <ExpertCardSkeleton key={i} />
           ))}
@@ -134,10 +129,10 @@ export default function ExpertsPage() {
             variants={container}
             initial="hidden"
             animate="show"
-            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
+            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 auto-rows-fr"
           >
             {experts.map((expert) => (
-              <motion.div key={expert._id} variants={item}>
+              <motion.div key={expert._id} variants={item} className="h-full">
                 <ExpertCard expert={expert} />
               </motion.div>
             ))}
