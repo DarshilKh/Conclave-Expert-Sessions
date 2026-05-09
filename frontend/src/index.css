@@ -1,0 +1,62 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: "DM Serif Display", Georgia, serif;
+  --font-sans: "DM Sans", system-ui, sans-serif;
+
+  --color-ocean-900: #003049;
+  --color-ocean-700: #2C7F91;
+  --color-ocean-400: #A7BED3;
+  --color-ocean-200: #C6CADA;
+  --color-ocean-50: #F2F2F2;
+
+  --color-slate-850: #1a2332;
+  --color-sage-600: #5E8374;
+  --color-sage-400: #8DAA91;
+  --color-sage-100: #BEC5B8;
+  --color-warm-200: #D9D5D0;
+  --color-warm-100: #F5F3F1;
+  --color-gold: #C9A84C;
+
+  --color-status-pending: #B45309;
+  --color-status-confirmed: #15803D;
+  --color-status-completed: #1D4ED8;
+  --color-status-cancelled: #991B1B;
+
+  --radius-card: 10px;
+  --shadow-card: 0 1px 3px rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.04);
+  --shadow-elevated: 0 4px 16px rgba(0,0,0,0.1), 0 1px 4px rgba(0,0,0,0.06);
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background-color: #F8F7F5;
+  color: #1a2332;
+  line-height: 1.6;
+}
+
+.font-display {
+  font-family: var(--font-display);
+}
+
+/* Skeleton animation */
+@keyframes shimmer {
+  0% { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+
+.skeleton {
+  background: linear-gradient(90deg, #e8e6e3 25%, #f0eeed 50%, #e8e6e3 75%);
+  background-size: 800px 100%;
+  animation: shimmer 1.6s infinite;
+  border-radius: 4px;
+}
