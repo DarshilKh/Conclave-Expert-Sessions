@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { fetchExpert } from '../lib/api.js';
@@ -6,6 +6,8 @@ import { getSocket, joinExpertRoom, leaveExpertRoom } from '../lib/socket.js';
 import SlotPicker from '../components/experts/SlotPicker.jsx';
 import BookingForm from '../components/bookings/BookingForm.jsx';
 import { Card, StarRating, Badge, Skeleton } from '../components/ui/index.jsx';
+
+// ─── Skeleton ────────────────────────────────────────────────────────────────
 
 function DetailSkeleton() {
   return (
@@ -34,15 +36,20 @@ function DetailSkeleton() {
   );
 }
 
+// ─── Page ────────────────────────────────────────────────────────────────────
+
 export default function ExpertDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [expert, setExpert] = useState(null);
+
+  const [expert, setExpert]           = useState(null);
   const [slotsByDate, setSlotsByDate] = useState({});
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [loading, setLoading]         = useState(true);
+  const [error, setError]             = useState(null);
   const [selectedSlot, setSelectedSlot] = useState({ date: null, time: null });
   const [realtimeBooked, setRealtimeBooked] = useState([]);
+
+  // ── Data fetching ──────────────────────────────────────────────────────────
 
   const loadExpert = useCallback(async () => {
     setLoading(true);
@@ -58,20 +65,28 @@ export default function ExpertDetailPage() {
     }
   }, [id]);
 
+  // Initial load
   useEffect(() => {
     loadExpert();
   }, [loadExpert]);
 
-  // Socket.io real-time updates
+  
+  useEffect(() => {
+    const interval = setInterval(loadExpert, 60_000);
+    return () => clearInterval(interval);
+  }, [loadExpert]);
+
   useEffect(() => {
     if (!id) return;
-    joinExpertRoom(id);
+
+    joinExpertRoom(id);        // guarded by activeRooms Set in socket.js
     const socket = getSocket();
 
     const handleSlotBooked = ({ expertId, date, timeSlot }) => {
+    
       if (expertId !== id) return;
 
-      // Mark the slot as booked in local state
+      // Update the slot grid in place — no full refetch needed
       setSlotsByDate((prev) => {
         const updated = { ...prev };
         if (updated[date]) {
@@ -82,29 +97,32 @@ export default function ExpertDetailPage() {
         return updated;
       });
 
+    
       setRealtimeBooked((prev) => [...prev, { date, time: timeSlot }]);
 
-      // Clear selected slot if it got booked by someone else
-      setSelectedSlot((prev) => {
-        if (prev.date === date && prev.time === timeSlot) {
-          return { date: null, time: null };
-        }
-        return prev;
-      });
+      setSelectedSlot((prev) =>
+        prev.date === date && prev.time === timeSlot
+          ? { date: null, time: null }
+          : prev
+      );
     };
 
     socket.on('slot:booked', handleSlotBooked);
 
     return () => {
       socket.off('slot:booked', handleSlotBooked);
-      leaveExpertRoom(id);
+      leaveExpertRoom(id);     // removes from activeRooms Set in socket.js
     };
   }, [id]);
 
+  // ── Booking success ────────────────────────────────────────────────────────
+
   const handleBookingSuccess = () => {
     setSelectedSlot({ date: null, time: null });
-    loadExpert();
+    loadExpert(); // pull the confirmed state from the server
   };
+
+  // ── Render ─────────────────────────────────────────────────────────────────
 
   if (loading) return <DetailSkeleton />;
 
@@ -140,7 +158,7 @@ export default function ExpertDetailPage() {
       </nav>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Left: Expert info + slots */}
+        {/* ── Left: Expert info + slots ─────────────────────────────────── */}
         <div className="lg:col-span-2 space-y-6">
           {/* Profile card */}
           <Card>
@@ -148,11 +166,16 @@ export default function ExpertDetailPage() {
               <div className="flex items-start gap-5">
                 <div className="w-20 h-20 rounded-full bg-[#C6CADA] overflow-hidden ring-2 ring-[#E8E5E1] shrink-0">
                   <img
-                    src={expert.avatar || `https://api.dicebear.com/7.x/personas/svg?seed=${expert._id}`}
+                    src={
+                      expert.avatar ||
+                      `https://api.dicebear.com/7.x/personas/svg?seed=${expert._id}`
+                    }
                     alt={expert.name}
                     className="w-full h-full object-cover"
                     onError={(e) => {
-                      e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(expert.name)}&background=A7BED3&color=003049&size=80`;
+                      e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                        expert.name
+                      )}&background=A7BED3&color=003049&size=80`;
                     }}
                   />
                 </div>
@@ -163,12 +186,16 @@ export default function ExpertDetailPage() {
                       <h1 className="font-display text-2xl text-[#003049] leading-tight">
                         {expert.name}
                       </h1>
-                      <p className="text-sm text-[#6B7280] mt-0.5">{expert.title}</p>
+                      <p className="text-sm text-[#6B7280] mt-0.5">
+                        {expert.title}
+                      </p>
                     </div>
                     <div className="text-right">
                       <p className="text-xl font-semibold text-[#003049]">
                         ${expert.hourlyRate}
-                        <span className="text-sm font-normal text-[#9CA3AF]">/hr</span>
+                        <span className="text-sm font-normal text-[#9CA3AF]">
+                          /hr
+                        </span>
                       </p>
                     </div>
                   </div>
@@ -210,7 +237,7 @@ export default function ExpertDetailPage() {
             </div>
           </Card>
 
-          {/* Slots */}
+          {/* Slot picker */}
           <Card>
             <div className="p-6">
               <div className="flex items-center justify-between mb-5">
@@ -226,16 +253,14 @@ export default function ExpertDetailPage() {
                 slotsByDate={slotsByDate}
                 selectedDate={selectedSlot.date}
                 selectedTime={selectedSlot.time}
-                onSelect={({ date, time }) =>
-                  setSelectedSlot({ date, time })
-                }
+                onSelect={({ date, time }) => setSelectedSlot({ date, time })}
                 bookedSlots={realtimeBooked}
               />
             </div>
           </Card>
         </div>
 
-        {/* Right: Booking form */}
+        {/* ── Right: Booking form ───────────────────────────────────────── */}
         <div>
           <div className="sticky top-24">
             <Card>
