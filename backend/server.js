@@ -11,13 +11,17 @@ import { errorHandler, notFound } from './middleware/errorHandler.js';
 import setupSockets from './sockets/index.js';
 
 const app = express();
+
+
+app.set('etag', false);
+
 const httpServer = createServer(app);
 
 const allowedOrigins = [
-  process.env.CLIENT_URL,        // e.g. https://your-app.vercel.app
-  'http://localhost:5173',       // Vite dev server
-  'http://localhost:4173',       // Vite preview (vite preview)
-].filter(Boolean);               // drop undefined when CLIENT_URL is not set
+  process.env.CLIENT_URL,
+  'http://localhost:5173',
+  'http://localhost:4173',
+].filter(Boolean);
 
 const corsOptions = {
   origin: (origin, callback) => {
@@ -38,28 +42,22 @@ const io = new Server(httpServer, {
 
 app.set('io', io);
 
-// ── Middleware ────────────────────────────────────────────────────────────────
 app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// ── Health check ──────────────────────────────────────────────────────────────
 app.get('/health', (_req, res) =>
   res.json({ status: 'ok', timestamp: new Date().toISOString() })
 );
 
-// ── Routes ────────────────────────────────────────────────────────────────────
 app.use('/api/experts', expertRoutes);
 app.use('/api/bookings', bookingRoutes);
 
-// ── Error handling ────────────────────────────────────────────────────────────
 app.use(notFound);
 app.use(errorHandler);
 
-// ── Sockets ───────────────────────────────────────────────────────────────────
 setupSockets(io);
 
-// ── Boot ──────────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 5000;
 
 const start = async () => {

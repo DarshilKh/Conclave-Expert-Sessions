@@ -21,8 +21,11 @@ api.interceptors.response.use(
 export const fetchExperts = (params) =>
   api.get('/experts', { params }).then((r) => r.data);
 
+// Cache-bust by appending a unique timestamp param. Combined with the
+// backend's no-cache headers, this guarantees the slot picker always
+// receives fresh availability data after a booking.
 export const fetchExpert = (id) =>
-  api.get(`/experts/${id}`).then((r) => r.data);
+  api.get(`/experts/${id}`, { params: { _t: Date.now() } }).then((r) => r.data);
 
 export const fetchCategories = () =>
   api.get('/experts/categories').then((r) => r.data);

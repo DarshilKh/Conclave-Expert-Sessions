@@ -74,6 +74,14 @@ export const getExpertById = asyncHandler(async (req, res) => {
     return acc;
   }, {});
 
+  // Slot availability changes constantly (every booking mutates it).
+  // Tell the browser, Render's edge, and Cloudflare to never cache this
+  // response. Belt-and-suspenders alongside app.set('etag', false).
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+  res.set('Surrogate-Control', 'no-store');
+
   res.json({ success: true, data: { ...expert, slotsByDate } });
 });
 
