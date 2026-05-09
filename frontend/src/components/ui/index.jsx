@@ -1,7 +1,6 @@
 import { motion } from 'framer-motion';
 import { cn } from '../../lib/utils.js';
 
-// Button
 export function Button({
   children,
   variant = 'primary',
@@ -18,7 +17,7 @@ export function Button({
     primary:
       'bg-[#003049] text-white hover:bg-[#023f61] focus:ring-[#2C7F91] active:scale-[0.98]',
     secondary:
-      'bg-white text-[#003049] border border-[#D0CCС7] hover:bg-[#F8F7F5] focus:ring-[#2C7F91]',
+      'bg-white text-[#003049] border border-[#D0CCC7] hover:bg-[#F8F7F5] focus:ring-[#2C7F91]',
     ghost:
       'text-[#2C7F91] hover:bg-[#F2F2F2] focus:ring-[#2C7F91]',
     danger:
@@ -64,12 +63,11 @@ export function Button({
   );
 }
 
-// Badge
 export function Badge({ children, variant = 'default', className }) {
   const variants = {
     default: 'bg-[#F2F2F2] text-[#6B7280] border-[#E5E2DE]',
-    ocean: 'bg-[#EEF5F8] text-[#2C7F91] border-[#A7BED3]',
-    sage: 'bg-[#EEF3EF] text-[#5E8374] border-[#8DAA91]',
+    ocean:   'bg-[#EEF5F8] text-[#2C7F91] border-[#A7BED3]',
+    sage:    'bg-[#EEF3EF] text-[#5E8374] border-[#8DAA91]',
   };
 
   return (
@@ -85,7 +83,6 @@ export function Badge({ children, variant = 'default', className }) {
   );
 }
 
-// Input
 export function Input({ label, error, className, ...props }) {
   return (
     <div className="flex flex-col gap-1.5">
@@ -108,7 +105,6 @@ export function Input({ label, error, className, ...props }) {
   );
 }
 
-// Textarea
 export function Textarea({ label, error, className, ...props }) {
   return (
     <div className="flex flex-col gap-1.5">
@@ -131,7 +127,6 @@ export function Textarea({ label, error, className, ...props }) {
   );
 }
 
-// Card
 export function Card({ children, className, hover = false, ...props }) {
   const Component = hover ? motion.div : 'div';
   const hoverProps = hover
@@ -153,7 +148,6 @@ export function Card({ children, className, hover = false, ...props }) {
   );
 }
 
-// Star Rating
 export function StarRating({ rating, size = 'sm' }) {
   const sizes = { sm: 'w-3.5 h-3.5', md: 'w-4 h-4' };
   return (
@@ -175,12 +169,10 @@ export function StarRating({ rating, size = 'sm' }) {
   );
 }
 
-// Skeleton
 export function Skeleton({ className }) {
   return <div className={cn('skeleton', className)} />;
 }
 
-// Empty state
 export function EmptyState({ icon, title, description, action }) {
   return (
     <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
