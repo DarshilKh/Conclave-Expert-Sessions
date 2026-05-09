@@ -1,6 +1,11 @@
 import { formatDate, formatTime } from '../../lib/utils.js';
 
-export default function SlotPicker({ slotsByDate, selectedDate, selectedTime, onSelect, bookedSlots = [] }) {
+export default function SlotPicker({
+  slotsByDate,
+  selectedDate,
+  selectedTime,
+  onSelect,
+}) {
   const dates = Object.keys(slotsByDate).sort();
 
   if (dates.length === 0) {
@@ -10,9 +15,6 @@ export default function SlotPicker({ slotsByDate, selectedDate, selectedTime, on
       </div>
     );
   }
-
-  const isBooked = (date, time) =>
-    bookedSlots.some((s) => s.date === date && s.time === time);
 
   return (
     <div className="space-y-5">
@@ -25,13 +27,13 @@ export default function SlotPicker({ slotsByDate, selectedDate, selectedTime, on
             </p>
             <div className="flex flex-wrap gap-2">
               {slots.map((slot) => {
-                const booked = slot.isBooked || isBooked(date, slot.time);
+                const booked = slot.isBooked;
                 const selected =
                   selectedDate === date && selectedTime === slot.time;
 
                 return (
                   <button
-                    key={slot.time}
+                    key={`${date}-${slot.time}`}
                     disabled={booked}
                     onClick={() =>
                       !booked && onSelect({ date, time: slot.time })

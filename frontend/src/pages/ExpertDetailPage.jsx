@@ -1,13 +1,11 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useState, useEffect, useCallback } from 'react';
+import { useParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { fetchExpert } from '../lib/api.js';
 import { getSocket, joinExpertRoom, leaveExpertRoom } from '../lib/socket.js';
 import SlotPicker from '../components/experts/SlotPicker.jsx';
 import BookingForm from '../components/bookings/BookingForm.jsx';
 import { Card, StarRating, Badge, Skeleton } from '../components/ui/index.jsx';
-
-// ─── Skeleton ────────────────────────────────────────────────────────────────
 
 function DetailSkeleton() {
   return (
@@ -36,20 +34,14 @@ function DetailSkeleton() {
   );
 }
 
-// ─── Page ────────────────────────────────────────────────────────────────────
-
 export default function ExpertDetailPage() {
   const { id } = useParams();
-  const navigate = useNavigate();
 
-  const [expert, setExpert]           = useState(null);
+  const [expert, setExpert] = useState(null);
   const [slotsByDate, setSlotsByDate] = useState({});
-  const [loading, setLoading]         = useState(true);
-  const [error, setError]             = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [selectedSlot, setSelectedSlot] = useState({ date: null, time: null });
-  const [realtimeBooked, setRealtimeBooked] = useState([]);
-
-  // ── Data fetching ──────────────────────────────────────────────────────────
 
   const loadExpert = useCallback(async () => {
     setLoading(true);
@@ -65,12 +57,10 @@ export default function ExpertDetailPage() {
     }
   }, [id]);
 
-  // Initial load
   useEffect(() => {
     loadExpert();
   }, [loadExpert]);
 
-  
   useEffect(() => {
     const interval = setInterval(loadExpert, 60_000);
     return () => clearInterval(interval);
@@ -79,26 +69,21 @@ export default function ExpertDetailPage() {
   useEffect(() => {
     if (!id) return;
 
-    joinExpertRoom(id);        // guarded by activeRooms Set in socket.js
+    joinExpertRoom(id);
     const socket = getSocket();
 
     const handleSlotBooked = ({ expertId, date, timeSlot }) => {
-    
       if (expertId !== id) return;
 
-      // Update the slot grid in place — no full refetch needed
       setSlotsByDate((prev) => {
-        const updated = { ...prev };
-        if (updated[date]) {
-          updated[date] = updated[date].map((slot) =>
+        if (!prev[date]) return prev;
+        return {
+          ...prev,
+          [date]: prev[date].map((slot) =>
             slot.time === timeSlot ? { ...slot, isBooked: true } : slot
-          );
-        }
-        return updated;
+          ),
+        };
       });
-
-    
-      setRealtimeBooked((prev) => [...prev, { date, time: timeSlot }]);
 
       setSelectedSlot((prev) =>
         prev.date === date && prev.time === timeSlot
@@ -111,18 +96,14 @@ export default function ExpertDetailPage() {
 
     return () => {
       socket.off('slot:booked', handleSlotBooked);
-      leaveExpertRoom(id);     // removes from activeRooms Set in socket.js
+      leaveExpertRoom(id);
     };
   }, [id]);
 
-  // ── Booking success ────────────────────────────────────────────────────────
-
   const handleBookingSuccess = () => {
     setSelectedSlot({ date: null, time: null });
-    loadExpert(); // pull the confirmed state from the server
+    loadExpert();
   };
-
-  // ── Render ─────────────────────────────────────────────────────────────────
 
   if (loading) return <DetailSkeleton />;
 
@@ -148,7 +129,6 @@ export default function ExpertDetailPage() {
       transition={{ duration: 0.3 }}
       className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10"
     >
-      {/* Breadcrumb */}
       <nav className="mb-7 flex items-center gap-2 text-sm text-[#9CA3AF]">
         <Link to="/" className="hover:text-[#003049] transition-colors">
           Experts
@@ -158,9 +138,7 @@ export default function ExpertDetailPage() {
       </nav>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* ── Left: Expert info + slots ─────────────────────────────────── */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Profile card */}
           <Card>
             <div className="p-6">
               <div className="flex items-start gap-5">
@@ -237,7 +215,6 @@ export default function ExpertDetailPage() {
             </div>
           </Card>
 
-          {/* Slot picker */}
           <Card>
             <div className="p-6">
               <div className="flex items-center justify-between mb-5">
@@ -254,13 +231,11 @@ export default function ExpertDetailPage() {
                 selectedDate={selectedSlot.date}
                 selectedTime={selectedSlot.time}
                 onSelect={({ date, time }) => setSelectedSlot({ date, time })}
-                bookedSlots={realtimeBooked}
               />
             </div>
           </Card>
         </div>
 
-        {/* ── Right: Booking form ───────────────────────────────────────── */}
         <div>
           <div className="sticky top-24">
             <Card>
