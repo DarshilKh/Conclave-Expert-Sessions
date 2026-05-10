@@ -1,12 +1,18 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { fetchExpert } from '../lib/api.js';
-import { getSocket, joinExpertRoom, leaveExpertRoom } from '../lib/socket.js';
+import {
+  getSocket,
+  joinExpertRoom,
+  leaveExpertRoom,
+  registerReconnectCallback,
+} from '../lib/socket.js';
 import SlotPicker from '../components/experts/SlotPicker.jsx';
 import BookingForm from '../components/bookings/BookingForm.jsx';
 import { Card, StarRating, Badge, Skeleton } from '../components/ui/index.jsx';
 
+// ── Skeleton shown while the expert profile is loading ───────────────────────
 function DetailSkeleton() {
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
@@ -34,17 +40,59 @@ function DetailSkeleton() {
   );
 }
 
+// ── Socket status indicator ───────────────────────────────────────────────────
+// Shown as a subtle banner when real-time updates are unavailable so users
+// know they may be looking at stale availability data.
+function SocketDisconnectedBanner({ visible }) {
+  return (
+    <AnimatePresence>
+      {visible && (
+        <motion.div
+          key="socket-banner"
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -8 }}
+          transition={{ duration: 0.2 }}
+          className="mb-4 flex items-center gap-2 rounded-md border border-amber-200
+                     bg-amber-50 px-4 py-2.5 text-sm text-amber-700"
+          role="status"
+          aria-live="polite"
+        >
+          {/* Pulsing dot */}
+          <span className="relative flex h-2 w-2 shrink-0">
+            <span className="absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-500" />
+          </span>
+          Live updates paused — availability shown may not be current.
+          Refreshing automatically&hellip;
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
+// ── ExpertDetailPage ──────────────────────────────────────────────────────────
 export default function ExpertDetailPage() {
   const { id } = useParams();
 
-  const [expert, setExpert] = useState(null);
+  const [expert, setExpert]           = useState(null);
   const [slotsByDate, setSlotsByDate] = useState({});
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [loading, setLoading]         = useState(true);
+  const [error, setError]             = useState(null);
   const [selectedSlot, setSelectedSlot] = useState({ date: null, time: null });
 
+  // Tracks whether the socket has been disconnected for > DISCONNECT_GRACE_MS.
+  // We don't show the banner immediately on a blip — only after a sustained
+  // disconnect, which prevents a flash during normal transport upgrades.
+  const [socketDisconnected, setSocketDisconnected] = useState(false);
+  const disconnectTimerRef = useRef(null);
+  const DISCONNECT_GRACE_MS = 5_000; // 5 seconds
+
+  // ── Data fetching ───────────────────────────────────────────────────────
   const loadExpert = useCallback(async () => {
-    setLoading(true);
+    // On the very first load we show the full skeleton.
+    // On subsequent (background) refreshes we leave expert visible and just
+    // update slotsByDate silently so the UI doesn't flash.
     setError(null);
     try {
       const res = await fetchExpert(id);
@@ -53,19 +101,79 @@ export default function ExpertDetailPage() {
     } catch (err) {
       setError(err.message);
     } finally {
-      setLoading(false);
+      // Only clear the initial loading state; subsequent calls are silent.
+      setLoading((prev) => (prev ? false : prev));
     }
   }, [id]);
 
+  // Initial data load
   useEffect(() => {
+    setLoading(true);
     loadExpert();
   }, [loadExpert]);
 
+  // ── Polling fallback ────────────────────────────────────────────────────
+  // Reconciles slot state even when Socket.IO is unavailable.
+  // Reduced from 60 s → 15 s so the worst-case stale window is much shorter
+  // (the socket reconnect handler closes it to ~0 in the normal case).
   useEffect(() => {
-    const interval = setInterval(loadExpert, 60_000);
+    const interval = setInterval(loadExpert, 15_000);
     return () => clearInterval(interval);
   }, [loadExpert]);
 
+  // ── Socket: disconnect UI indicator ────────────────────────────────────
+  // Show the amber banner only after DISCONNECT_GRACE_MS of continuous
+  // disconnection to avoid flashing during brief transport upgrades.
+  useEffect(() => {
+    if (!id) return;
+
+    const socket = getSocket();
+
+    const handleDisconnect = () => {
+      disconnectTimerRef.current = setTimeout(() => {
+        setSocketDisconnected(true);
+      }, DISCONNECT_GRACE_MS);
+    };
+
+    const handleConnect = () => {
+      // Clear the grace-period timer on reconnect.
+      if (disconnectTimerRef.current) {
+        clearTimeout(disconnectTimerRef.current);
+        disconnectTimerRef.current = null;
+      }
+      setSocketDisconnected(false);
+    };
+
+    socket.on('connect', handleConnect);
+    socket.on('disconnect', handleDisconnect);
+
+    // Reflect the current connection state immediately in case the socket
+    // is already disconnected when this effect runs.
+    if (!socket.connected) {
+      handleDisconnect();
+    }
+
+    return () => {
+      socket.off('connect', handleConnect);
+      socket.off('disconnect', handleDisconnect);
+      if (disconnectTimerRef.current) {
+        clearTimeout(disconnectTimerRef.current);
+        disconnectTimerRef.current = null;
+      }
+    };
+  }, [id]);
+
+  // ── Socket: reconnect → immediate data reconciliation ──────────────────
+  // Fixes the 0-60 s stale-slot gap identified in the audit:
+  // when the socket reconnects, call loadExpert() immediately so any slots
+  // booked during the disconnection window are reflected at once.
+  useEffect(() => {
+    if (!id) return;
+    const unregister = registerReconnectCallback(loadExpert);
+    return unregister;
+  }, [id, loadExpert]);
+
+  // ── Socket: real-time slot updates ─────────────────────────────────────
   useEffect(() => {
     if (!id) return;
 
@@ -73,8 +181,11 @@ export default function ExpertDetailPage() {
     const socket = getSocket();
 
     const handleSlotBooked = ({ expertId, date, timeSlot }) => {
+      // Guard: ignore events for other experts (should never happen with
+      // room-based targeting, but be defensive).
       if (expertId !== id) return;
 
+      // Optimistically mark the slot booked in local state.
       setSlotsByDate((prev) => {
         if (!prev[date]) return prev;
         return {
@@ -85,6 +196,8 @@ export default function ExpertDetailPage() {
         };
       });
 
+      // Deselect the slot if the user currently has it selected, so they
+      // cannot inadvertently submit a booking for an already-taken slot.
       setSelectedSlot((prev) =>
         prev.date === date && prev.time === timeSlot
           ? { date: null, time: null }
@@ -100,11 +213,13 @@ export default function ExpertDetailPage() {
     };
   }, [id]);
 
+  // ── Booking success callback ────────────────────────────────────────────
   const handleBookingSuccess = () => {
     setSelectedSlot({ date: null, time: null });
-    loadExpert();
+    loadExpert(); // re-fetch to sync authoritative server state
   };
 
+  // ── Render ──────────────────────────────────────────────────────────────
   if (loading) return <DetailSkeleton />;
 
   if (error) {
@@ -129,6 +244,10 @@ export default function ExpertDetailPage() {
       transition={{ duration: 0.3 }}
       className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10"
     >
+      {/* Socket disconnect banner */}
+      <SocketDisconnectedBanner visible={socketDisconnected} />
+
+      {/* Breadcrumb */}
       <nav className="mb-7 flex items-center gap-2 text-sm text-[#9CA3AF]">
         <Link to="/" className="hover:text-[#003049] transition-colors">
           Experts
@@ -138,10 +257,13 @@ export default function ExpertDetailPage() {
       </nav>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* ── Left column ──────────────────────────────────────────────── */}
         <div className="lg:col-span-2 space-y-6">
+          {/* Expert profile card */}
           <Card>
             <div className="p-6">
               <div className="flex items-start gap-5">
+                {/* Avatar */}
                 <div className="w-20 h-20 rounded-full bg-[#C6CADA] overflow-hidden ring-2 ring-[#E8E5E1] shrink-0">
                   <img
                     src={
@@ -158,6 +280,7 @@ export default function ExpertDetailPage() {
                   />
                 </div>
 
+                {/* Info */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-3 flex-wrap">
                     <div>
@@ -205,7 +328,8 @@ export default function ExpertDetailPage() {
                   {expert.tags.map((tag) => (
                     <span
                       key={tag}
-                      className="text-xs px-2.5 py-1 bg-[#F8F7F5] text-[#6B7280] rounded-md border border-[#E8E5E1]"
+                      className="text-xs px-2.5 py-1 bg-[#F8F7F5] text-[#6B7280]
+                                 rounded-md border border-[#E8E5E1]"
                     >
                       {tag}
                     </span>
@@ -215,17 +339,32 @@ export default function ExpertDetailPage() {
             </div>
           </Card>
 
+          {/* Slot picker card */}
           <Card>
             <div className="p-6">
               <div className="flex items-center justify-between mb-5">
                 <h2 className="text-base font-semibold text-[#1a2332]">
                   Available Sessions
                 </h2>
-                <span className="flex items-center gap-1.5 text-xs text-[#5E8374]">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#5E8374] animate-pulse" />
-                  Live availability
+                {/* Live indicator — dimmed when socket is disconnected */}
+                <span
+                  className={`flex items-center gap-1.5 text-xs transition-colors ${
+                    socketDisconnected
+                      ? 'text-amber-500'
+                      : 'text-[#5E8374]'
+                  }`}
+                >
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full ${
+                      socketDisconnected
+                        ? 'bg-amber-400'
+                        : 'bg-[#5E8374] animate-pulse'
+                    }`}
+                  />
+                  {socketDisconnected ? 'Reconnecting…' : 'Live availability'}
                 </span>
               </div>
+
               <SlotPicker
                 slotsByDate={slotsByDate}
                 selectedDate={selectedSlot.date}
@@ -236,6 +375,7 @@ export default function ExpertDetailPage() {
           </Card>
         </div>
 
+        {/* ── Right column — booking form ───────────────────────────────── */}
         <div>
           <div className="sticky top-24">
             <Card>
